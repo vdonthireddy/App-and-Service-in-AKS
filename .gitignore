@@ -3,7 +3,7 @@ node_modules
 npm-debug.log
 
 ### Java ###
-/target/
+target
 !.mvn/wrapper/maven-wrapper.jar
 
 ### STS ###
