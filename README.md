@@ -1,1 +1,4 @@
-# App-and-Service-in-AKS
+Run the following command:
+```sh
+bash allrun.sh
+```
