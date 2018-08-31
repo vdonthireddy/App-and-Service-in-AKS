@@ -11,7 +11,10 @@ spec:
     spec:
       containers:
        - name: vjapp-container
-         image: vdonthireddy/appinaks:6.0
+         image: vdonthireddy/appinaks:7.0
+         env:
+          - name: SERVICE_HOST_URL
+            value: http://vjservice-service/got
          ports:
           - containerPort: 80
 ---
@@ -42,7 +45,7 @@ spec:
     spec:
       containers:
        - name: vjservice-container
-         image: vdonthireddy/serviceinaks:6.0
+         image: vdonthireddy/serviceinaks:7.0
          ports:
           - containerPort: 80
 ---

@@ -9,7 +9,8 @@ app.get("/", (req, res) => {
 });
 
 app.get("/names", (req, res) => {
-    request("http://vjservice-service/got", function(error, response, body) {
+    request(process.env.SERVICE_HOST_URL, function(error, response, body) {
+        console.log("Service host URL: " + process.env.SERVICE_HOST_URL);
         console.log('body: ' + body);
         res.send(body);
     });
