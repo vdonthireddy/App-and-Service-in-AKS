@@ -11,25 +11,18 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.TimeZone;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.http.MediaType;
-import org.springframework.util.SystemPropertyUtils;
-
-// import com.squareup.okhttp.MediaType;
-// import com.squareup.okhttp.OkHttpClient;
-// import com.squareup.okhttp.Request;
-// import com.squareup.okhttp.RequestBody;
-// import com.squareup.okhttp.Response;
+import org.springframework.stereotype.Component;
 import org.json.JSONObject;
-import org.json.JSONException;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -39,6 +32,22 @@ import okhttp3.Response;
 @SpringBootApplication
 @RestController
 public class GoTApplication {
+
+	@Value("${tenantid}")
+	private String tenantId;
+
+	@Value("${clientid}")
+	private String clientid;
+
+	@Value("${clientsecret}")
+	private String clientsecret;
+
+	@Value("${resource}")
+	private String resource;
+
+	private String dbUser;
+	private String password;
+	private String token;
 
 	@RequestMapping("/")
 	String hello() {
@@ -63,20 +72,30 @@ public class GoTApplication {
 		map.put("Cersei Lannister", "Lena Headey");
 		map.put("IP Address", ipAddress);
 		return map;
-	 }
+	}
 
-	 @GetMapping(value="/secret")
-	 public String getSecret() {
-		 System.out.println("secret called");
-		return getSecretValue();
-	 }
+	@GetMapping(value="/secret")
+	public String getSecret() {
+		System.out.println("secret called");
+		System.out.println("tenantId: " + this.tenantId);
+		dbUser =  getSecretValue("https://donvault.vault.azure.net/secrets/postgresadminuser/?api-version=7.0");
+		password =  getSecretValue("https://donvault.vault.azure.net/secrets/postgresadminpassword/?api-version=7.0");
+		System.out.println("user name: " + dbUser + "; password: " + password);
+		return dbUser + "; " + password;
+	}
 
 	 @GetMapping(value="/db", produces=MediaType.APPLICATION_JSON_VALUE)
 	 public Map<String, String> getDb() throws Exception {
 		String host = "donpostgres.postgres.database.azure.com";
 		String dbName="dondb";
-		String dbUser = "vdonthireddy@donpostgres";
-		String password = "Nihar007!!!";
+
+		if (dbUser == null) {
+			System.out.println("db User is null and getting the value...");
+			if (token == null) {
+				getToken();
+			}
+			getSecret();
+		}
 		
 		try {	
 			Class.forName("org.postgresql.Driver");
@@ -92,7 +111,7 @@ public class GoTApplication {
 			Properties properties = new Properties();
 			properties.setProperty("user", dbUser);
 			properties.setProperty("password", password);
-			properties.setProperty("ssl", "false");
+			properties.setProperty("ssl", "true");
 
 			connection = DriverManager.getConnection(url, properties);
 		} catch (Exception e) {
@@ -167,35 +186,42 @@ public class GoTApplication {
 
 		OkHttpClient client = new OkHttpClient();
 		okhttp3.MediaType mediaType = okhttp3.MediaType.parse("application/x-www-form-urlencoded");
-		RequestBody body = RequestBody.create(mediaType, "grant_type=client_credentials&client_id=<SERVICE_PRINCIPAL_APP_ID>>&client_secret=<SERVICE_PRINCIPAL_PASSWORD(KEY)>&resource=https%3A%2F%2Fvault.azure.net");
+		String content = String.format("grant_type=client_credentials&client_id=%s&client_secret=%s&resource=%s", clientid, clientsecret, resource);
+		System.out.println("Content: " + content);
+		RequestBody body = RequestBody.create(mediaType, content);
+		String oAuthUrl = String.format("https://login.microsoftonline.com/%s/oauth2/token", tenantId);
+		System.out.println("oAuthUrl: " + oAuthUrl);
 		Request request = new Request.Builder()
-		.url("https://login.microsoftonline.com/<TENANT-ID>/oauth2/token")
+		.url(oAuthUrl)
 		.post(body)
 		.addHeader("Content-Type", "application/x-www-form-urlencoded")
 		.build();
 
-		String output = "";
+		//String output = "";
 		try {
 			Response response = client.newCall(request).execute();
 			JSONObject objJsonObject = new JSONObject(response.body().string());
-			System.out.println(objJsonObject.getString("access_token"));
-			output = objJsonObject.getString("access_token");
+			//System.out.println(objJsonObject.getString("access_token"));
+			token = objJsonObject.getString("access_token");
 		} catch (Exception e) {
-			output = "ERROR: " + e.getMessage();
+			token = null;//"ERROR: " + e.getMessage();
 		}
 		
-		System.out.println("getToken output: " + output);
+		//System.out.println("getToken output: " + output);
 		
-		return output;
+		return token;
 	}
 
-	public String getSecretValue() {
+	public String getSecretValue(String secretKeyUrl) {
 		System.out.println("getSecretValue called");
+		if (token == null) {
+			getToken();
+		}
 		OkHttpClient client = new OkHttpClient();
 		Request request = new Request.Builder()
-		.url("https://donvault.vault.azure.net/secrets/<Secret Key Name>/?api-version=2016-10-01")
+		.url(secretKeyUrl)//"https://donvault.vault.azure.net/secrets/postgresadminpassword/?api-version=2016-10-01")
 		.get()
-		.addHeader("Authorization", "Bearer " + getToken())
+		.addHeader("Authorization", "Bearer " + token)
 		.addHeader("Content-Type", "application/json")
 		.build();
 
