@@ -20,8 +20,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
 import org.json.JSONObject;
 
 import okhttp3.OkHttpClient;
@@ -44,10 +44,6 @@ public class GoTApplication {
 
 	@Value("${resource}")
 	private String resource;
-
-	private String dbUser;
-	private String password;
-	private String token;
 
 	@RequestMapping("/")
 	String hello() {
@@ -74,29 +70,47 @@ public class GoTApplication {
 		return map;
 	}
 
-	@GetMapping(value="/secret")
-	public String getSecret() {
-		System.out.println("secret called");
-		System.out.println("tenantId: " + this.tenantId);
-		dbUser =  getSecretValue("https://donvault.vault.azure.net/secrets/postgresadminuser/?api-version=7.0");
-		password =  getSecretValue("https://donvault.vault.azure.net/secrets/postgresadminpassword/?api-version=7.0");
-		System.out.println("user name: " + dbUser + "; password: " + password);
-		return dbUser + "; " + password;
+	String token;
+	@GetMapping(value="/secret/{secretKeyName}")
+	public String getSecret(@PathVariable("secretKeyName") String secretKeyName) {
+		if (token==null) {
+			token = getToken();
+		}
+		String secretKeyUrl = String.format("https://donvault.vault.azure.net/secrets/%s/?api-version=7.0", secretKeyName);
+		// String secretKeyValue =  getSecretValue(token, String.format("https://donvault.vault.azure.net/secrets/%s/?api-version=7.0", secretKeyName));
+
+		OkHttpClient client = new OkHttpClient();
+		Request request = new Request.Builder()
+		.url(secretKeyUrl)
+		.get()
+		.addHeader("Authorization", "Bearer " + token)
+		.addHeader("Content-Type", "application/json")
+		.build();
+
+		String secretKeyValue = null;
+		try {
+			Response response = client.newCall(request).execute();
+			
+			JSONObject objJsonObject = new JSONObject(response.body().string());
+			secretKeyValue = objJsonObject.getString("value");
+
+		} catch (Exception e) {
+			//secretKeyValue = "ERROR: " + e.getMessage();
+		}
+		
+		System.out.println(String.format("KeyName: %s; KeyValue: %s", secretKeyName, secretKeyValue));
+		
+		return secretKeyValue;
 	}
 
 	 @GetMapping(value="/db", produces=MediaType.APPLICATION_JSON_VALUE)
-	 public Map<String, String> getDb() throws Exception {
-		String host = "donpostgres.postgres.database.azure.com";
-		String dbName="dondb";
+	 public String getDb() throws Exception {
 
-		if (dbUser == null) {
-			System.out.println("db User is null and getting the value...");
-			if (token == null) {
-				getToken();
-			}
-			getSecret();
-		}
-		
+		String host = getSecret("postgreshostname");//"donpostgres.postgres.database.azure.com";
+		String dbName = getSecret("postgresdbname");//"dondb";
+		String dbUser = getSecret("postgresadminuser");
+		String password = getSecret("postgresadminpassword");
+
 		try {	
 			Class.forName("org.postgresql.Driver");
 		}catch(ClassNotFoundException cnfe) {
@@ -172,7 +186,7 @@ public class GoTApplication {
 		if (connection != null) {
 			connection = null;
 		}
-		return null;
+		return "/db called";
 	 }
 	 
 	//vj.redis.cache.windows.net:6380,password=ATueZKr4E7lDX6SUBMElYC6KkPgBkQIgaTrcQ66THHA=,ssl=True,abortConnect=False
@@ -181,7 +195,7 @@ public class GoTApplication {
 		SpringApplication.run(GoTApplication.class, args);
 	}
 
-	public String getToken() {
+	private String getToken() {
 		System.out.println("getToken called");
 
 		OkHttpClient client = new OkHttpClient();
@@ -212,33 +226,33 @@ public class GoTApplication {
 		return token;
 	}
 
-	public String getSecretValue(String secretKeyUrl) {
-		System.out.println("getSecretValue called");
-		if (token == null) {
-			getToken();
-		}
-		OkHttpClient client = new OkHttpClient();
-		Request request = new Request.Builder()
-		.url(secretKeyUrl)//"https://donvault.vault.azure.net/secrets/postgresadminpassword/?api-version=2016-10-01")
-		.get()
-		.addHeader("Authorization", "Bearer " + token)
-		.addHeader("Content-Type", "application/json")
-		.build();
+	// public String getSecretValue(String token, String secretKeyUrl) {
+	// 	System.out.println("getSecretValue called");
+	// 	if (token == null) {
+	// 		getToken();
+	// 	}
+	// 	OkHttpClient client = new OkHttpClient();
+	// 	Request request = new Request.Builder()
+	// 	.url(secretKeyUrl)//"https://donvault.vault.azure.net/secrets/postgresadminpassword/?api-version=2016-10-01")
+	// 	.get()
+	// 	.addHeader("Authorization", "Bearer " + token)
+	// 	.addHeader("Content-Type", "application/json")
+	// 	.build();
 
-		String output = "";
-		try {
-			Response response = client.newCall(request).execute();
+	// 	String output = "";
+	// 	try {
+	// 		Response response = client.newCall(request).execute();
 			
-			JSONObject objJsonObject = new JSONObject(response.body().string());
-			System.out.println(objJsonObject.getString("value"));
-			output = objJsonObject.getString("value");
+	// 		JSONObject objJsonObject = new JSONObject(response.body().string());
+	// 		System.out.println(objJsonObject.getString("value"));
+	// 		output = objJsonObject.getString("value");
 
-		} catch (Exception e) {
-			output = "ERROR: " + e.getMessage();
-		}
+	// 	} catch (Exception e) {
+	// 		output = "ERROR: " + e.getMessage();
+	// 	}
 
-		System.out.println("getSecretValue output: " + output);
+	// 	System.out.println("getSecretValue output: " + output);
 
-		return output;
-	}
+	// 	return output;
+	// }
 }

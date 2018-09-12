@@ -9,7 +9,15 @@ app.get("/", (req, res) => {
 });
 
 app.get("/names", (req, res) => {
-    request(process.env.SERVICE_HOST_URL, function(error, response, body) {
+    request(process.env.SERVICE_HOST_URL + "/got", function(error, response, body) {
+        console.log("Service host URL: " + SERVICE_HOST_URL);
+        console.log('body: ' + body);
+        res.send(body);
+    });
+});
+
+app.get("/db", (req, res)=> {
+    request(process.env.SERVICE_HOST_URL + "/db", function(error, response, body) {
         console.log("Service host URL: " + SERVICE_HOST_URL);
         console.log('body: ' + body);
         res.send(body);
